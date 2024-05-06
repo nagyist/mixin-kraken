@@ -12,7 +12,7 @@ import (
 	"github.com/MixinNetwork/mixin/logger"
 	"github.com/gofrs/uuid/v5"
 	"github.com/pion/rtp"
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 )
 
 const (

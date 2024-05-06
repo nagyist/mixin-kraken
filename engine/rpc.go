@@ -11,7 +11,7 @@ import (
 	"github.com/MixinNetwork/mixin/logger"
 	"github.com/dimfeld/httptreemux/v5"
 	"github.com/gorilla/handlers"
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 	"github.com/unrolled/render"
 )
 
