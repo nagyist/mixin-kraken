@@ -50,12 +50,16 @@ func (r *Router) list(rid string) ([]map[string]any, error) {
 func (r *Router) create(rid, uid, callback string, offer webrtc.SessionDescription) (*Peer, error) {
 	se := webrtc.SettingEngine{}
 	se.SetLite(true)
+	se.EnableSCTPZeroChecksum(true)
 	se.SetInterfaceFilter(func(in string) bool { return in == r.engine.Interface })
 	se.SetNAT1To1IPs([]string{r.engine.IP}, webrtc.ICECandidateTypeHost)
 	se.SetICETimeouts(10*time.Second, 30*time.Second, 2*time.Second)
-	se.SetEphemeralUDPPortRange(r.engine.PortMin, r.engine.PortMax)
 	se.SetDTLSInsecureSkipHelloVerify(true)
 	se.SetReceiveMTU(8192)
+	err := se.SetEphemeralUDPPortRange(r.engine.PortMin, r.engine.PortMax)
+	if err != nil {
+		return nil, err
+	}
 
 	me := &webrtc.MediaEngine{}
 	opusChrome := webrtc.RTPCodecParameters{
@@ -66,11 +70,17 @@ func (r *Router) create(rid, uid, callback string, offer webrtc.SessionDescripti
 		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1", RTCPFeedback: nil},
 		PayloadType:        109,
 	}
-	me.RegisterCodec(opusChrome, webrtc.RTPCodecTypeAudio)
-	me.RegisterCodec(opusFirefox, webrtc.RTPCodecTypeAudio)
+	err = me.RegisterCodec(opusChrome, webrtc.RTPCodecTypeAudio)
+	if err != nil {
+		return nil, err
+	}
+	err = me.RegisterCodec(opusFirefox, webrtc.RTPCodecTypeAudio)
+	if err != nil {
+		return nil, err
+	}
 
 	ir := &interceptor.Registry{}
-	err := webrtc.RegisterDefaultInterceptors(me, ir)
+	err = webrtc.RegisterDefaultInterceptors(me, ir)
 	if err != nil {
 		panic(err)
 	}

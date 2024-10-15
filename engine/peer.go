@@ -177,18 +177,18 @@ func (peer *Peer) callbackOnTrack() error {
 }
 
 func (peer *Peer) copyTrack(src *webrtc.TrackRemote, dst *webrtc.TrackLocalStaticRTP) error {
-	go func() error {
+	go func() {
 		defer close(peer.queue)
 
 		for {
 			pkt, _, err := src.ReadRTP()
 			if err == io.EOF {
 				logger.Verbosef("copyTrack(%s) EOF\n", peer.id())
-				return nil
+				return
 			}
 			if err != nil {
 				logger.Verbosef("copyTrack(%s) error %s\n", peer.id(), err.Error())
-				return err
+				return
 			}
 			peer.queue <- pkt
 		}
