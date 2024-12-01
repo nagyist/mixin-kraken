@@ -1,5 +1,5 @@
-github.com/MixinNetwork/mixin v0.18.18 h1:DiAL5THxlBmMm+T9iwbpVd0c3LXna0Au4clsowJarkg=
-github.com/MixinNetwork/mixin v0.18.18/go.mod h1:8nJ7tYEpt852/WXu6VFyqQM+hrvtbtVmzBFTsnRPHLw=
+github.com/MixinNetwork/mixin v0.18.19 h1:Gn7+jeBwQK1bef9g3eMZKc9KGvhejAbieGRINSFTro0=
+github.com/MixinNetwork/mixin v0.18.19/go.mod h1:4nuOz2bRYc6H3ffbLaqMGCsp+fZIJn4URUfLt0f50Zw=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dimfeld/httptreemux/v5 v5.5.0 h1:p8jkiMrCuZ0CmhwYLcbNbl7DDo21fozhKHQ2PccwOFQ=
@@ -48,8 +48,8 @@ github.com/pion/transport/v3 v3.0.7 h1:iRbMH05BzSNwhILHoBoAPxoB9xQgOaJk+591KC9P1
 github.com/pion/transport/v3 v3.0.7/go.mod h1:YleKiTZ4vqNxVwh77Z0zytYi7rXHl7j6uPLGhhz9rwo=
 github.com/pion/turn/v4 v4.0.0 h1:qxplo3Rxa9Yg1xXDxxH8xaqcyGUtbHYw4QSCvmFWvhM=
 github.com/pion/turn/v4 v4.0.0/go.mod h1:MuPDkm15nYSklKpN8vWJ9W2M0PlyQZqYt1McGuxG7mA=
-github.com/pion/webrtc/v4 v4.0.3 h1:vEF0jxIzaVcgEFpeRE7oQv+0L8LsVrBHgb3LKH3VLBM=
-github.com/pion/webrtc/v4 v4.0.3/go.mod h1:LvP8Np5b/sM0uyJIcUPvJcCvhtjHxJwzh2H2PYzE6cQ=
+github.com/pion/webrtc/v4 v4.0.5 h1:8cVPojcv3cQTwVga2vF1rzCNvkiEimnYdCCG7yF317I=
+github.com/pion/webrtc/v4 v4.0.5/go.mod h1:LvP8Np5b/sM0uyJIcUPvJcCvhtjHxJwzh2H2PYzE6cQ=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.4.0/go.mod h1:YvHI0jy2hoMjB+UWwv71VJQ9isScKT/TqJzVSSt89Yw=

@@ -3,7 +3,7 @@ module github.com/MixinNetwork/kraken
 go 1.23.3
 
 require (
-	github.com/MixinNetwork/mixin v0.18.18
+	github.com/MixinNetwork/mixin v0.18.19
 	github.com/dimfeld/httptreemux/v5 v5.5.0
 	github.com/gofrs/uuid/v5 v5.3.0
 	github.com/gorilla/handlers v1.5.2
@@ -11,7 +11,7 @@ require (
 	github.com/pion/interceptor v0.1.37
 	github.com/pion/rtp v1.8.9
 	github.com/pion/sdp/v2 v2.4.0
-	github.com/pion/webrtc/v4 v4.0.3
+	github.com/pion/webrtc/v4 v4.0.5
 	github.com/unrolled/render v1.7.0
 )
 
