@@ -48,8 +48,11 @@ func (r *Render) RenderData(data any) {
 	if r.id != "" {
 		body["id"] = r.id
 	}
-	r.impl.JSON(r.w, http.StatusOK, body)
-	logger.Printf("RPC.handle(id: %s, time: %fs) OK\n", r.id, time.Now().Sub(r.startAt).Seconds())
+	rerr := r.impl.JSON(r.w, http.StatusOK, body)
+	if rerr != nil {
+		panic(rerr)
+	}
+	logger.Printf("RPC.handle(id: %s, time: %f) OK\n", r.id, time.Since(r.startAt).Seconds())
 }
 
 func (r *Render) RenderError(err error) {
@@ -57,8 +60,11 @@ func (r *Render) RenderError(err error) {
 	if r.id != "" {
 		body["id"] = r.id
 	}
-	r.impl.JSON(r.w, http.StatusOK, body)
-	logger.Printf("RPC.handle(id: %s, time: %fs) ERROR %s\n", r.id, time.Now().Sub(r.startAt).Seconds(), err.Error())
+	rerr := r.impl.JSON(r.w, http.StatusOK, body)
+	if rerr != nil {
+		panic(err)
+	}
+	logger.Printf("RPC.handle(id: %s, time: %f) ERROR %s\n", r.id, time.Since(r.startAt).Seconds(), err.Error())
 }
 
 func (impl *R) handle(w http.ResponseWriter, r *http.Request, _ map[string]string) {
@@ -66,7 +72,7 @@ func (impl *R) handle(w http.ResponseWriter, r *http.Request, _ map[string]strin
 	d := json.NewDecoder(r.Body)
 	d.UseNumber()
 	if err := d.Decode(&call); err != nil {
-		render.New().JSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		renderJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 		return
 	}
 	renderer := NewRender(w, call.Id)
@@ -205,7 +211,11 @@ func (r *R) publish(params []any) (string, *webrtc.SessionDescription, error) {
 		}
 		callback = cbk
 	}
-	return r.router.publish(rid, uid, sdp, limit, callback)
+	var listenOnly bool
+	if len(params) == 6 {
+		listenOnly, _ = params[5].(bool)
+	}
+	return r.router.publish(rid, uid, sdp, limit, callback, listenOnly)
 }
 
 func (r *R) restart(params []any) (*webrtc.SessionDescription, error) {
@@ -293,14 +303,14 @@ func (r *R) parseId(params []any) ([]string, error) {
 
 func registerHandlers(router *httptreemux.TreeMux) {
 	router.MethodNotAllowedHandler = func(w http.ResponseWriter, r *http.Request, _ map[string]httptreemux.HandlerFunc) {
-		render.New().JSON(w, http.StatusNotFound, map[string]any{"error": "not found"})
+		renderJSON(w, http.StatusNotFound, map[string]any{"error": "not found"})
 	}
 	router.NotFoundHandler = func(w http.ResponseWriter, r *http.Request) {
-		render.New().JSON(w, http.StatusNotFound, map[string]any{"error": "not found"})
+		renderJSON(w, http.StatusNotFound, map[string]any{"error": "not found"})
 	}
 	router.PanicHandler = func(w http.ResponseWriter, r *http.Request, rcv any) {
 		logger.Println(rcv)
-		render.New().JSON(w, http.StatusInternalServerError, map[string]any{"error": "server error"})
+		renderJSON(w, http.StatusInternalServerError, map[string]any{"error": "server error"})
 	}
 }
 
@@ -316,11 +326,18 @@ func handleCORS(handler http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Methods", "OPTIONS,GET,POST,DELETE")
 		w.Header().Set("Access-Control-Max-Age", "600")
 		if r.Method == "OPTIONS" {
-			render.New().JSON(w, http.StatusOK, map[string]any{})
+			renderJSON(w, http.StatusOK, map[string]any{})
 		} else {
 			handler.ServeHTTP(w, r)
 		}
 	})
+}
+
+func renderJSON(w http.ResponseWriter, status int, data any) {
+	err := render.New().JSON(w, status, data)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func ServeRPC(engine *Engine, conf *Configuration) error {

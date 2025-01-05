@@ -42,12 +42,13 @@ func (r *Router) list(rid string) ([]map[string]any, error) {
 		peers = append(peers, map[string]any{
 			"id":    p.uid,
 			"track": cid.String(),
+			"mute":  p.listenOnly,
 		})
 	}
 	return peers, nil
 }
 
-func (r *Router) create(rid, uid, callback string, offer webrtc.SessionDescription) (*Peer, error) {
+func (r *Router) create(rid, uid, callback string, listenOnly bool, offer webrtc.SessionDescription) (*Peer, error) {
 	se := webrtc.SettingEngine{}
 	se.SetLite(true)
 	se.EnableSCTPZeroChecksum(true)
@@ -114,11 +115,11 @@ func (r *Router) create(rid, uid, callback string, offer webrtc.SessionDescripti
 	}
 	<-gatherComplete
 
-	peer := BuildPeer(rid, uid, pc, callback)
+	peer := BuildPeer(rid, uid, pc, callback, listenOnly)
 	return peer, nil
 }
 
-func (r *Router) publish(rid, uid string, jsep string, limit int, callback string) (string, *webrtc.SessionDescription, error) {
+func (r *Router) publish(rid, uid string, jsep string, limit int, callback string, listenOnly bool) (string, *webrtc.SessionDescription, error) {
 	if err := validateId(rid); err != nil {
 		return "", nil, buildError(ErrorInvalidParams, fmt.Errorf("invalid rid format %s %s", rid, err.Error()))
 	}
@@ -141,9 +142,7 @@ func (r *Router) publish(rid, uid string, jsep string, limit int, callback strin
 	}
 
 	room := r.engine.GetRoom(rid)
-	room.Lock()
-	defer room.Unlock()
-
+	room.RLock()
 	if limit > 0 {
 		for i, p := range room.m {
 			cid := uuid.FromStringOrNil(p.cid)
@@ -156,6 +155,7 @@ func (r *Router) publish(rid, uid string, jsep string, limit int, callback strin
 			return "", nil, buildError(ErrorRoomFull, fmt.Errorf("room full %d", limit))
 		}
 	}
+	room.RUnlock()
 
 	timer := time.NewTimer(peerTrackConnectionTimeout)
 	defer timer.Stop()
@@ -163,7 +163,7 @@ func (r *Router) publish(rid, uid string, jsep string, limit int, callback strin
 	pc := make(chan *Peer)
 	ec := make(chan error)
 	go func() {
-		peer, err := r.create(rid, uid, callback, offer)
+		peer, err := r.create(rid, uid, callback, listenOnly, offer)
 		if err != nil {
 			ec <- err
 		} else {
@@ -174,6 +174,8 @@ func (r *Router) publish(rid, uid string, jsep string, limit int, callback strin
 	case err := <-ec:
 		return "", nil, err
 	case peer := <-pc:
+		room.Lock()
+		defer room.Unlock()
 		old := room.m[peer.uid]
 		if old != nil {
 			old.Close()
@@ -188,9 +190,9 @@ func (r *Router) publish(rid, uid string, jsep string, limit int, callback strin
 
 func (r *Router) restart(rid, uid, cid string, jsep string) (*webrtc.SessionDescription, error) {
 	room := r.engine.GetRoom(rid)
-	room.Lock()
+	room.RLock()
 	peer, err := room.get(uid, cid)
-	room.Unlock()
+	room.RUnlock()
 
 	if err != nil {
 		return nil, err
@@ -235,9 +237,9 @@ func (r *Router) restart(rid, uid, cid string, jsep string) (*webrtc.SessionDesc
 
 func (r *Router) end(rid, uid, cid string) error {
 	room := r.engine.GetRoom(rid)
-	room.Lock()
+	room.RLock()
 	peer, err := room.get(uid, cid)
-	room.Unlock()
+	room.RUnlock()
 
 	if err != nil {
 		return err
@@ -256,9 +258,9 @@ func (r *Router) trickle(rid, uid, cid string, candi string) error {
 	}
 
 	room := r.engine.GetRoom(rid)
-	room.Lock()
+	room.RLock()
 	peer, err := room.get(uid, cid)
-	room.Unlock()
+	room.RUnlock()
 	if err != nil {
 		return err
 	}
@@ -270,8 +272,8 @@ func (r *Router) trickle(rid, uid, cid string, candi string) error {
 
 func (r *Router) subscribe(rid, uid, cid string) (*webrtc.SessionDescription, error) {
 	room := r.engine.GetRoom(rid)
-	room.Lock()
-	defer room.Unlock()
+	room.RLock()
+	defer room.RUnlock()
 
 	peer, err := room.get(uid, cid)
 	if err != nil {
@@ -307,6 +309,7 @@ func (r *Router) subscribe(rid, uid, cid string) (*webrtc.SessionDescription, er
 			}
 			if p.track != nil && (old == nil || old.id != p.cid) {
 				sender, err := peer.pc.AddTrack(p.track)
+				logger.Printf("peer %s add subscriber %s => %v %v", peer.id(), p.id(), sender, err)
 				if err != nil {
 					logger.Printf("failed to add sender %s to peer %s with error %s\n", p.id(), peer.id(), err.Error())
 				} else if id := sender.Track().ID(); id != p.cid {
@@ -368,9 +371,9 @@ func (r *Router) answer(rid, uid, cid string, jsep string) error {
 	}
 
 	room := r.engine.GetRoom(rid)
-	room.Lock()
+	room.RLock()
 	peer, err := room.get(uid, cid)
-	room.Unlock()
+	room.RUnlock()
 	if err != nil {
 		return err
 	}

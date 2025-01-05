@@ -40,6 +40,7 @@ type Peer struct {
 	uid         string
 	cid         string
 	callback    string
+	listenOnly  bool
 	pc          *webrtc.PeerConnection
 	track       *webrtc.TrackLocalStaticRTP
 	publishers  map[string]*Sender
@@ -48,13 +49,14 @@ type Peer struct {
 	connected   chan bool
 }
 
-func BuildPeer(rid, uid string, pc *webrtc.PeerConnection, callback string) *Peer {
+func BuildPeer(rid, uid string, pc *webrtc.PeerConnection, callback string, listenOnly bool) *Peer {
 	cid, err := uuid.NewV4()
 	if err != nil {
 		panic(err)
 	}
 	peer := &Peer{rid: rid, uid: uid, cid: cid.String(), pc: pc}
 	peer.callback = callback
+	peer.listenOnly = listenOnly
 	peer.connected = make(chan bool, 1)
 	peer.queue = make(chan *rtp.Packet, 8)
 	peer.publishers = make(map[string]*Sender)
@@ -107,7 +109,7 @@ func (peer *Peer) handle() {
 		logger.Printf("HandlePeer(%s) OnICEConnectionStateChange(%s)\n", peer.id(), state)
 	})
 	peer.pc.OnTrack(func(rt *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-		logger.Printf("HandlePeer(%s) OnTrack(%d, %d)\n", peer.id(), rt.PayloadType(), rt.SSRC())
+		logger.Printf("HandlePeer(%s) OnTrack(%s, %d, %d)\n", peer.id(), rt.ID(), rt.PayloadType(), rt.SSRC())
 		added, err := peer.addTrackFromRemote(rt)
 		if err != nil {
 			panic(err)
@@ -121,7 +123,7 @@ func (peer *Peer) handle() {
 		if err != nil {
 			logger.Printf("HandlePeer(%s) OnTrack(%d, %d) callback error %v\n", peer.id(), rt.PayloadType(), rt.SSRC(), err)
 		} else {
-			err = peer.copyTrack(rt, peer.track)
+			err = peer.copyTrack(rt)
 			logger.Printf("HandlePeer(%s) OnTrack(%d, %d) end with %v\n", peer.id(), rt.PayloadType(), rt.SSRC(), err)
 		}
 		peer.Close()
@@ -176,7 +178,7 @@ func (peer *Peer) callbackOnTrack() error {
 	return nil
 }
 
-func (peer *Peer) copyTrack(src *webrtc.TrackRemote, dst *webrtc.TrackLocalStaticRTP) error {
+func (peer *Peer) copyTrack(src *webrtc.TrackRemote) error {
 	go func() {
 		defer close(peer.queue)
 
@@ -190,19 +192,22 @@ func (peer *Peer) copyTrack(src *webrtc.TrackRemote, dst *webrtc.TrackLocalStati
 				logger.Verbosef("copyTrack(%s) error %s\n", peer.id(), err.Error())
 				return
 			}
+			if peer.listenOnly {
+				continue
+			}
 			peer.queue <- pkt
 		}
 	}()
 
 	for {
-		err := peer.consumeQueue(dst)
+		err := peer.consumeQueue()
 		if err != nil {
 			return err
 		}
 	}
 }
 
-func (peer *Peer) consumeQueue(dst *webrtc.TrackLocalStaticRTP) error {
+func (peer *Peer) consumeQueue() error {
 	timer := time.NewTimer(peerTrackReadTimeout)
 	defer timer.Stop()
 
@@ -211,7 +216,7 @@ func (peer *Peer) consumeQueue(dst *webrtc.TrackLocalStaticRTP) error {
 		if !ok {
 			return fmt.Errorf("peer queue closed")
 		}
-		err := dst.WriteRTP(pkt)
+		err := peer.track.WriteRTP(pkt)
 		if err != nil {
 			return fmt.Errorf("peer track write %v", err)
 		}
