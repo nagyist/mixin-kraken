@@ -99,6 +99,13 @@ func (impl *R) handle(w http.ResponseWriter, r *http.Request, _ map[string]strin
 		} else {
 			renderer.RenderData(map[string]any{"peers": peers})
 		}
+	case "mute":
+		peer, err := impl.mute(call.Params)
+		if err != nil {
+			renderer.RenderError(err)
+		} else {
+			renderer.RenderData(map[string]any{"peer": peer})
+		}
 	case "publish":
 		cid, answer, err := impl.publish(call.Params)
 		if err != nil {
@@ -178,6 +185,25 @@ func (r *R) list(params []any) ([]map[string]any, error) {
 	return r.router.list(rid)
 }
 
+func (r *R) mute(params []any) (map[string]any, error) {
+	if len(params) != 2 {
+		return nil, buildError(ErrorInvalidParams, fmt.Errorf("invalid params count %d", len(params)))
+	}
+	rid, ok := params[0].(string)
+	if !ok {
+		return nil, buildError(ErrorInvalidParams, fmt.Errorf("invalid rid type %s", params[0]))
+	}
+	uid, ok := params[1].(string)
+	if !ok {
+		return nil, buildError(ErrorInvalidParams, fmt.Errorf("invalid uid type %s", params[1]))
+	}
+	peer := r.router.mute(rid, uid)
+	if peer == nil {
+		return nil, buildError(http.StatusNotFound, fmt.Errorf("peer not found %s", params[1]))
+	}
+	return peer, nil
+}
+
 func (r *R) publish(params []any) (string, *webrtc.SessionDescription, error) {
 	if len(params) < 3 {
 		return "", nil, buildError(ErrorInvalidParams, fmt.Errorf("invalid params count %d", len(params)))
@@ -213,7 +239,8 @@ func (r *R) publish(params []any) (string, *webrtc.SessionDescription, error) {
 	}
 	var listenOnly bool
 	if len(params) == 6 {
-		listenOnly, _ = params[5].(bool)
+		los, _ := params[5].(string)
+		listenOnly, _ = strconv.ParseBool(los)
 	}
 	return r.router.publish(rid, uid, sdp, limit, callback, listenOnly)
 }

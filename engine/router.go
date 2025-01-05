@@ -48,6 +48,28 @@ func (r *Router) list(rid string) ([]map[string]any, error) {
 	return peers, nil
 }
 
+func (r *Router) mute(rid, uid string) map[string]any {
+	room := r.engine.GetRoom(rid)
+	room.Lock()
+	defer room.Unlock()
+	for _, p := range room.m {
+		if p.uid != uid {
+			continue
+		}
+		cid := uuid.FromStringOrNil(p.cid)
+		if cid.String() == uuid.Nil.String() {
+			continue
+		}
+		p.listenOnly = !p.listenOnly
+		return map[string]any{
+			"id":    p.uid,
+			"track": cid.String(),
+			"mute":  p.listenOnly,
+		}
+	}
+	return nil
+}
+
 func (r *Router) create(rid, uid, callback string, listenOnly bool, offer webrtc.SessionDescription) (*Peer, error) {
 	se := webrtc.SettingEngine{}
 	se.SetLite(true)
