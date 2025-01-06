@@ -22,6 +22,8 @@ func NewRouter(engine *Engine) *Router {
 }
 
 func (r *Router) info() any {
+	r.engine.rooms.RLock()
+	defer r.engine.rooms.RUnlock()
 	return r.engine.State
 }
 

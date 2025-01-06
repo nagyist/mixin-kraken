@@ -56,12 +56,7 @@ func (engine *Engine) Loop() {
 		}
 		engine.rooms.RUnlock()
 
-		engine.State.UpdatedAt = time.Now()
-		engine.State.ActiveRooms = 0
-		engine.State.ClosedRooms = 0
-		engine.State.ActivePeers = 0
-		engine.State.ClosedPeers = 0
-
+		state := State{UpdatedAt: time.Now()}
 		for _, pm := range rooms {
 			pm.RLock()
 			peers := pm.peersCopy()
@@ -74,14 +69,15 @@ func (engine *Engine) Loop() {
 					ap += 1
 				}
 			}
-			engine.State.ActivePeers += ap
-			engine.State.ClosedPeers += cp
+			state.ActivePeers += ap
+			state.ClosedPeers += cp
 			if ap > 0 {
-				engine.State.ActiveRooms += 1
+				state.ActiveRooms += 1
 			} else {
-				engine.State.ClosedRooms += 1
+				state.ClosedRooms += 1
 			}
 		}
+		engine.State = state
 
 		time.Sleep(engineStateLoopPeriod)
 	}
