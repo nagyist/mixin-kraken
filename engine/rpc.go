@@ -10,6 +10,7 @@ import (
 
 	"github.com/MixinNetwork/mixin/logger"
 	"github.com/dimfeld/httptreemux/v5"
+	"github.com/gofrs/uuid/v5"
 	"github.com/gorilla/handlers"
 	"github.com/pion/webrtc/v4"
 	"github.com/unrolled/render"
@@ -67,6 +68,12 @@ func (r *Render) RenderError(err error) {
 	logger.Printf("RPC.handle(id: %s, time: %f) ERROR %s\n", r.id, time.Since(r.startAt).Seconds(), err.Error())
 }
 
+func (impl *R) root(w http.ResponseWriter, r *http.Request, _ map[string]string) {
+	info := impl.info()
+	renderer := NewRender(w, uuid.Must(uuid.NewV4()).String())
+	renderer.RenderData(info)
+}
+
 func (impl *R) handle(w http.ResponseWriter, r *http.Request, _ map[string]string) {
 	var call Call
 	d := json.NewDecoder(r.Body)
@@ -86,12 +93,8 @@ func (impl *R) handle(w http.ResponseWriter, r *http.Request, _ map[string]strin
 			renderer.RenderData(servers)
 		}
 	case "info":
-		info, err := impl.info(call.Params)
-		if err != nil {
-			renderer.RenderError(err)
-		} else {
-			renderer.RenderData(info)
-		}
+		info := impl.info()
+		renderer.RenderData(info)
 	case "list":
 		peers, err := impl.list(call.Params)
 		if err != nil {
@@ -167,10 +170,7 @@ func (r *R) turn(params []any) (any, error) {
 	return turn(r.conf, uid)
 }
 
-func (r *R) info(params []any) (any, error) {
-	if len(params) != 0 {
-		return nil, buildError(ErrorInvalidParams, fmt.Errorf("invalid params count %d", len(params)))
-	}
+func (r *R) info() any {
 	return r.router.info()
 }
 
@@ -371,6 +371,7 @@ func ServeRPC(engine *Engine, conf *Configuration) error {
 	logger.Printf("ServeRPC(:%d)\n", conf.RPC.Port)
 	impl := &R{router: NewRouter(engine), conf: conf}
 	router := httptreemux.New()
+	router.GET("/", impl.root)
 	router.POST("/", impl.handle)
 	registerHandlers(router)
 	handler := handleCORS(router)

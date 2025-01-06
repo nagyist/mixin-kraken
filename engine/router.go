@@ -21,8 +21,8 @@ func NewRouter(engine *Engine) *Router {
 	return &Router{engine: engine}
 }
 
-func (r *Router) info() (any, error) {
-	return r.engine.State, nil
+func (r *Router) info() any {
+	return r.engine.State
 }
 
 func (r *Router) list(rid string) ([]map[string]any, error) {
