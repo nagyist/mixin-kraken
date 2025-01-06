@@ -159,6 +159,14 @@ func (engine *Engine) GetRoom(rid string) *pmap {
 	return rm.m[rid]
 }
 
+func (room *pmap) peersCopy() map[string]*Peer {
+	peers := make(map[string]*Peer, len(room.m))
+	for k, v := range room.m {
+		peers[k] = v
+	}
+	return peers
+}
+
 func (room *pmap) get(uid, cid string) (*Peer, error) {
 	peer := room.m[uid]
 	if peer == nil {

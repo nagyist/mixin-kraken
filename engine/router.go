@@ -164,8 +164,8 @@ func (r *Router) publish(rid, uid string, jsep string, limit int, callback strin
 	}
 
 	room := r.engine.GetRoom(rid)
-	room.RLock()
 	if limit > 0 {
+		room.RLock()
 		for i, p := range room.m {
 			cid := uuid.FromStringOrNil(p.cid)
 			if cid.String() == uuid.Nil.String() || uid == i {
@@ -173,11 +173,11 @@ func (r *Router) publish(rid, uid string, jsep string, limit int, callback strin
 			}
 			limit--
 		}
+		room.RUnlock()
 		if limit <= 0 {
 			return "", nil, buildError(ErrorRoomFull, fmt.Errorf("room full %d", limit))
 		}
 	}
-	room.RUnlock()
 
 	timer := time.NewTimer(peerTrackConnectionTimeout)
 	defer timer.Stop()
@@ -295,9 +295,9 @@ func (r *Router) trickle(rid, uid, cid string, candi string) error {
 func (r *Router) subscribe(rid, uid, cid string) (*webrtc.SessionDescription, error) {
 	room := r.engine.GetRoom(rid)
 	room.RLock()
-	defer room.RUnlock()
-
+	peers := room.peersCopy()
 	peer, err := room.get(uid, cid)
+	room.RUnlock()
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +312,7 @@ func (r *Router) subscribe(rid, uid, cid string) (*webrtc.SessionDescription, er
 		defer peer.Unlock()
 
 		var renegotiate bool
-		for _, p := range room.m {
+		for _, p := range peers {
 			if p.uid == peer.uid {
 				continue
 			}
