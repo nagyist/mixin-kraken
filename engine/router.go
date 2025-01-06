@@ -22,37 +22,35 @@ func NewRouter(engine *Engine) *Router {
 }
 
 func (r *Router) info() (any, error) {
-	rm := r.engine.rooms
-	rm.RLock()
-	defer rm.RUnlock()
-
 	return r.engine.State, nil
 }
 
 func (r *Router) list(rid string) ([]map[string]any, error) {
 	room := r.engine.GetRoom(rid)
 	room.RLock()
-	defer room.RUnlock()
-	peers := make([]map[string]any, 0)
-	for _, p := range room.m {
+	peers := room.peersCopy()
+	room.RUnlock()
+	list := make([]map[string]any, 0)
+	for _, p := range peers {
 		cid := uuid.FromStringOrNil(p.cid)
 		if cid.String() == uuid.Nil.String() {
 			continue
 		}
-		peers = append(peers, map[string]any{
+		list = append(list, map[string]any{
 			"id":    p.uid,
 			"track": cid.String(),
 			"mute":  p.listenOnly,
 		})
 	}
-	return peers, nil
+	return list, nil
 }
 
 func (r *Router) mute(rid, uid string) map[string]any {
 	room := r.engine.GetRoom(rid)
-	room.Lock()
-	defer room.Unlock()
-	for _, p := range room.m {
+	room.RLock()
+	peers := room.peersCopy()
+	room.RUnlock()
+	for _, p := range peers {
 		if p.uid != uid {
 			continue
 		}
@@ -166,14 +164,15 @@ func (r *Router) publish(rid, uid string, jsep string, limit int, callback strin
 	room := r.engine.GetRoom(rid)
 	if limit > 0 {
 		room.RLock()
-		for i, p := range room.m {
+		peers := room.peersCopy()
+		room.RUnlock()
+		for i, p := range peers {
 			cid := uuid.FromStringOrNil(p.cid)
 			if cid.String() == uuid.Nil.String() || uid == i {
 				continue
 			}
 			limit--
 		}
-		room.RUnlock()
 		if limit <= 0 {
 			return "", nil, buildError(ErrorRoomFull, fmt.Errorf("room full %d", limit))
 		}

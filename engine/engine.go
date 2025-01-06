@@ -50,6 +50,11 @@ func BuildEngine(conf *Configuration) (*Engine, error) {
 func (engine *Engine) Loop() {
 	for {
 		engine.rooms.RLock()
+		rooms := make(map[string]*pmap, len(engine.rooms.m))
+		for k, v := range engine.rooms.m {
+			rooms[k] = v
+		}
+		engine.rooms.RUnlock()
 
 		engine.State.UpdatedAt = time.Now()
 		engine.State.ActiveRooms = 0
@@ -57,10 +62,12 @@ func (engine *Engine) Loop() {
 		engine.State.ActivePeers = 0
 		engine.State.ClosedPeers = 0
 
-		for _, pm := range engine.rooms.m {
+		for _, pm := range rooms {
 			pm.RLock()
+			peers := pm.peersCopy()
+			pm.RUnlock()
 			ap, cp := 0, 0
-			for _, p := range pm.m {
+			for _, p := range peers {
 				if p.cid == peerTrackClosedId {
 					cp += 1
 				} else {
@@ -74,10 +81,8 @@ func (engine *Engine) Loop() {
 			} else {
 				engine.State.ClosedRooms += 1
 			}
-			pm.RUnlock()
 		}
 
-		engine.rooms.RUnlock()
 		time.Sleep(engineStateLoopPeriod)
 	}
 }
