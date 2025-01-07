@@ -239,8 +239,7 @@ func (r *R) publish(params []any) (string, *webrtc.SessionDescription, error) {
 	}
 	var listenOnly bool
 	if len(params) == 6 {
-		los, _ := params[5].(string)
-		listenOnly, _ = strconv.ParseBool(los)
+		listenOnly, _ = strconv.ParseBool(fmt.Sprint(params[5]))
 	}
 	return r.router.publish(rid, uid, sdp, limit, callback, listenOnly)
 }
