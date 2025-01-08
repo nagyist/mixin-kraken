@@ -296,7 +296,6 @@ func (r *Router) trickle(rid, uid, cid string, candi string) error {
 func (r *Router) subscribe(rid, uid, cid string) (*webrtc.SessionDescription, error) {
 	room := r.engine.GetRoom(rid)
 	room.RLock()
-	peers := room.peersCopy()
 	peer, err := room.get(uid, cid)
 	room.RUnlock()
 	if err != nil {
@@ -309,47 +308,14 @@ func (r *Router) subscribe(rid, uid, cid string) (*webrtc.SessionDescription, er
 	ec := make(chan error)
 	gc := make(chan struct{})
 	go func() {
-		peer.Lock()
-		defer peer.Unlock()
-
-		var renegotiate bool
-		for _, p := range peers {
-			if p.uid == peer.uid {
-				continue
-			}
-			p.Lock()
-			old := peer.publishers[p.uid]
-
-			if old != nil && (p.track == nil || old.id != p.cid) {
-				err := peer.pc.RemoveTrack(old.rtp)
-				if err != nil {
-					logger.Printf("failed to remove sender %s from peer %s with error %s\n", p.id(), peer.id(), err.Error())
-				} else {
-					delete(peer.publishers, p.uid)
-					delete(p.subscribers, peer.uid)
-					renegotiate = true
-				}
-			}
-			if p.track != nil && (old == nil || old.id != p.cid) {
-				sender, err := peer.pc.AddTrack(p.track)
-				logger.Printf("peer %s add subscriber %s => %v %v", peer.id(), p.id(), sender, err)
-				if err != nil {
-					logger.Printf("failed to add sender %s to peer %s with error %s\n", p.id(), peer.id(), err.Error())
-				} else if id := sender.Track().ID(); id != p.cid {
-					panic(fmt.Errorf("malformed peer and track id %s %s", p.cid, id))
-				} else {
-					peer.publishers[p.uid] = &Sender{id: p.cid, rtp: sender}
-					p.subscribers[peer.uid] = &Sender{id: peer.cid, rtp: sender}
-					renegotiate = true
-				}
-			}
-
-			p.Unlock()
-		}
+		renegotiate := room.connectSubscribers(peer)
 		if !renegotiate {
 			ec <- nil
 			return
 		}
+
+		peer.Lock()
+		defer peer.Unlock()
 
 		offer, err := peer.pc.CreateOffer(nil)
 		if err != nil {
@@ -375,6 +341,52 @@ func (r *Router) subscribe(rid, uid, cid string) (*webrtc.SessionDescription, er
 		err := fmt.Errorf("subscribe(%s,%s,%s) timeout", rid, uid, cid)
 		return nil, buildError(ErrorServerTimeout, err)
 	}
+}
+
+func (room *pmap) connectSubscribers(peer *Peer) bool {
+	room.Lock()
+	defer room.Unlock()
+
+	peers := room.peersCopy()
+	peer.Lock()
+	defer peer.Unlock()
+
+	var renegotiate bool
+	for _, p := range peers {
+		if p.uid == peer.uid {
+			continue
+		}
+		p.Lock()
+		old := peer.publishers[p.uid]
+
+		if old != nil && (p.track == nil || old.id != p.cid) {
+			err := peer.pc.RemoveTrack(old.rtp)
+			if err != nil {
+				logger.Printf("failed to remove sender %s from peer %s with error %s\n", p.id(), peer.id(), err.Error())
+			} else {
+				delete(peer.publishers, p.uid)
+				delete(p.subscribers, peer.uid)
+				renegotiate = true
+			}
+		}
+		if p.track != nil && (old == nil || old.id != p.cid) {
+			sender, err := peer.pc.AddTrack(p.track)
+			logger.Printf("peer %s add subscriber %s => %v %v", peer.id(), p.id(), sender, err)
+			if err != nil {
+				logger.Printf("failed to add sender %s to peer %s with error %s\n", p.id(), peer.id(), err.Error())
+			} else if id := sender.Track().ID(); id != p.cid {
+				panic(fmt.Errorf("malformed peer and track id %s %s", p.cid, id))
+			} else {
+				peer.publishers[p.uid] = &Sender{id: p.cid, rtp: sender}
+				p.subscribers[peer.uid] = &Sender{id: peer.cid, rtp: sender}
+				renegotiate = true
+			}
+		}
+
+		p.Unlock()
+	}
+
+	return renegotiate
 }
 
 func (r *Router) answer(rid, uid, cid string, jsep string) error {
