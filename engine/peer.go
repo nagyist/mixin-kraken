@@ -17,8 +17,8 @@ import (
 
 const (
 	peerTrackClosedId          = "CLOSED"
-	peerTrackConnectionTimeout = 60 * time.Second
-	peerTrackReadTimeout       = 60 * time.Second
+	peerTrackConnectionTimeout = 30 * time.Second
+	peerTrackReadTimeout       = 10 * time.Second
 )
 
 var clbkClient *http.Client
@@ -35,7 +35,7 @@ type Sender struct {
 }
 
 type Peer struct {
-	sync.RWMutex
+	sync.Mutex
 	rid         string
 	uid         string
 	cid         string
@@ -192,9 +192,6 @@ func (peer *Peer) copyTrack(src *webrtc.TrackRemote) error {
 				logger.Verbosef("copyTrack(%s) error %s\n", peer.id(), err.Error())
 				return
 			}
-			if peer.listenOnly {
-				continue
-			}
 			peer.queue <- pkt
 		}
 	}()
@@ -215,6 +212,10 @@ func (peer *Peer) consumeQueue() error {
 	case pkt, ok := <-peer.queue:
 		if !ok {
 			return fmt.Errorf("peer queue closed")
+		}
+		if peer.listenOnly {
+			// FIXME make real silent opus packet
+			pkt.Payload = make([]byte, len(pkt.Payload))
 		}
 		err := peer.track.WriteRTP(pkt)
 		if err != nil {
