@@ -83,12 +83,24 @@ func (r *Router) create(rid, uid, callback string, listenOnly bool, offer webrtc
 
 	me := &webrtc.MediaEngine{}
 	opusChrome := webrtc.RTPCodecParameters{
-		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1", RTCPFeedback: nil},
-		PayloadType:        111,
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:     webrtc.MimeTypeOpus,
+			ClockRate:    48000,
+			Channels:     2,
+			SDPFmtpLine:  "minptime=10;useinbandfec=1",
+			RTCPFeedback: nil,
+		},
+		PayloadType: 111,
 	}
 	opusFirefox := webrtc.RTPCodecParameters{
-		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1", RTCPFeedback: nil},
-		PayloadType:        109,
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:     webrtc.MimeTypeOpus,
+			ClockRate:    48000,
+			Channels:     2,
+			SDPFmtpLine:  "minptime=10;useinbandfec=1",
+			RTCPFeedback: nil,
+		},
+		PayloadType: 109,
 	}
 	err = me.RegisterCodec(opusChrome, webrtc.RTPCodecTypeAudio)
 	if err != nil {
@@ -126,13 +138,11 @@ func (r *Router) create(rid, uid, callback string, listenOnly bool, offer webrtc
 		pc.Close()
 		return nil, buildError(ErrorServerCreateAnswer, err)
 	}
-	gatherComplete := webrtc.GatheringCompletePromise(pc)
 	err = pc.SetLocalDescription(answer)
 	if err != nil {
 		pc.Close()
 		return nil, buildError(ErrorServerSetLocalAnswer, err)
 	}
-	<-gatherComplete
 
 	peer := BuildPeer(rid, uid, pc, callback, listenOnly)
 	return peer, nil
@@ -175,35 +185,24 @@ func (r *Router) publish(rid, uid string, jsep string, limit int, callback strin
 		}
 	}
 
-	timer := time.NewTimer(peerTrackConnectionTimeout)
-	defer timer.Stop()
+	room.Lock()
+	defer room.Unlock()
 
-	pc := make(chan *Peer)
-	ec := make(chan error)
-	go func() {
-		peer, err := r.create(rid, uid, callback, listenOnly, offer)
-		if err != nil {
-			ec <- err
-		} else {
-			pc <- peer
-		}
-	}()
-	select {
-	case err := <-ec:
+	var peer *Peer
+	err = lockRunWithTimeout(func(ec chan error) {
+		peer, err = r.create(rid, uid, callback, listenOnly, offer)
+		ec <- err
+	}, peerTrackConnectionTimeout)
+	if err != nil {
 		return "", nil, err
-	case peer := <-pc:
-		room.Lock()
-		defer room.Unlock()
-		old := room.m[peer.uid]
-		if old != nil {
-			_ = old.CloseWithTimeout()
-		}
-		room.m[peer.uid] = peer
-		return peer.cid, peer.pc.LocalDescription(), nil
-	case <-timer.C:
-		err := fmt.Errorf("publish(%s,%s) timeout", rid, uid)
-		return "", nil, buildError(ErrorServerTimeout, err)
 	}
+
+	old := room.m[peer.uid]
+	if old != nil {
+		_ = old.CloseWithTimeout()
+	}
+	room.m[peer.uid] = peer
+	return peer.cid, peer.pc.LocalDescription(), nil
 }
 
 func (r *Router) restart(rid, uid, cid string, jsep string) (*webrtc.SessionDescription, error) {
@@ -212,9 +211,6 @@ func (r *Router) restart(rid, uid, cid string, jsep string) (*webrtc.SessionDesc
 	if err != nil {
 		return nil, err
 	}
-
-	peer.Lock()
-	defer peer.Unlock()
 
 	var offer webrtc.SessionDescription
 	err = json.Unmarshal([]byte(jsep), &offer)
@@ -230,6 +226,9 @@ func (r *Router) restart(rid, uid, cid string, jsep string) (*webrtc.SessionDesc
 		return nil, buildError(ErrorInvalidSDP, err)
 	}
 
+	peer.Lock()
+	defer peer.Unlock()
+
 	err = lockRunWithTimeout(func(r chan error) {
 		err = peer.pc.SetRemoteDescription(offer)
 		if err != nil {
@@ -243,16 +242,15 @@ func (r *Router) restart(rid, uid, cid string, jsep string) (*webrtc.SessionDesc
 			r <- buildError(ErrorServerCreateAnswer, err)
 			return
 		}
-		gatherComplete := webrtc.GatheringCompletePromise(peer.pc)
 		err = peer.pc.SetLocalDescription(answer)
 		if err != nil {
 			peer.pc.Close()
 			r <- buildError(ErrorServerSetLocalAnswer, err)
 			return
 		}
-		<-gatherComplete
 		r <- nil
 	}, peerTrackConnectionTimeout)
+
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +287,7 @@ func (r *Router) trickle(rid, uid, cid string, candi string) error {
 
 	return lockRunWithTimeout(func(r chan error) {
 		r <- peer.pc.AddICECandidate(ici)
-	}, peerTrackConnectionTimeout)
+	}, peerTrackReadTimeout)
 }
 
 func (r *Router) subscribe(rid, uid, cid string) (*webrtc.SessionDescription, error) {
@@ -326,25 +324,19 @@ func (peer *Peer) doSubscribe(peers map[string]*Peer) error {
 			r := peer.connectPublisher(pub)
 			renegotiate = renegotiate || r
 		}
-		if !renegotiate {
-			r <- nil
-			return
+		if renegotiate {
+			offer, err := peer.pc.CreateOffer(nil)
+			if err != nil {
+				r <- buildError(ErrorServerCreateOffer, err)
+				return
+			}
+			err = peer.pc.SetLocalDescription(offer)
+			if err != nil {
+				r <- buildError(ErrorServerSetLocalOffer, err)
+				return
+			}
 		}
-
-		offer, err := peer.pc.CreateOffer(nil)
-		if err != nil {
-			r <- buildError(ErrorServerCreateOffer, err)
-			return
-		}
-		gatherComplete := webrtc.GatheringCompletePromise(peer.pc)
-		err = peer.pc.SetLocalDescription(offer)
-		if err != nil {
-			r <- buildError(ErrorServerSetLocalOffer, err)
-			return
-		}
-		<-gatherComplete
 		r <- nil
-
 	}, peerTrackConnectionTimeout)
 }
 

@@ -97,7 +97,7 @@ func (peer *Peer) handle() {
 		case <-peer.connected:
 		case <-timer.C:
 			logger.Printf("HandlePeer(%s) OnTrackTimeout()\n", peer.id())
-			peer.CloseWithTimeout()
+			_ = peer.CloseWithTimeout()
 		}
 	}()
 
@@ -128,7 +128,8 @@ func (peer *Peer) handle() {
 			err = peer.copyTrack(rt)
 			logger.Printf("HandlePeer(%s) OnTrack(%d, %d) end with %v\n", peer.id(), rt.PayloadType(), rt.SSRC(), err)
 		}
-		peer.CloseWithTimeout()
+		err = peer.CloseWithTimeout()
+		logger.Printf("HandlePeer(%s) OnTrack(%d, %d) DONE %v\n", peer.id(), rt.PayloadType(), rt.SSRC(), err)
 	})
 }
 
