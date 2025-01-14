@@ -138,7 +138,7 @@ func (r *Router) create(rid, uid, callback string, listenOnly bool, offer webrtc
 		pc.Close()
 		return nil, buildError(ErrorServerCreateAnswer, err)
 	}
-	err = pc.SetLocalDescription(answer)
+	err = setLocalDescription(pc, answer)
 	if err != nil {
 		pc.Close()
 		return nil, buildError(ErrorServerSetLocalAnswer, err)
@@ -189,9 +189,10 @@ func (r *Router) publish(rid, uid string, jsep string, limit int, callback strin
 	defer room.Unlock()
 
 	var peer *Peer
-	err = lockRunWithTimeout(func(ec chan error) {
-		peer, err = r.create(rid, uid, callback, listenOnly, offer)
-		ec <- err
+	err = lockRunWithTimeout(func() error {
+		pub, err := r.create(rid, uid, callback, listenOnly, offer)
+		peer = pub
+		return err
 	}, peerTrackConnectionTimeout)
 	if err != nil {
 		return "", nil, err
@@ -229,29 +230,26 @@ func (r *Router) restart(rid, uid, cid string, jsep string) (*webrtc.SessionDesc
 	peer.Lock()
 	defer peer.Unlock()
 
-	err = lockRunWithTimeout(func(r chan error) {
-		err = peer.pc.SetRemoteDescription(offer)
+	err = lockRunWithTimeout(func() error {
+		err := peer.pc.SetRemoteDescription(offer)
 		if err != nil {
-			peer.pc.Close()
-			r <- buildError(ErrorServerSetRemoteOffer, err)
-			return
+			return buildError(ErrorServerSetRemoteOffer, err)
 		}
 		answer, err := peer.pc.CreateAnswer(nil)
 		if err != nil {
-			peer.pc.Close()
-			r <- buildError(ErrorServerCreateAnswer, err)
-			return
+			return buildError(ErrorServerCreateAnswer, err)
 		}
-		err = peer.pc.SetLocalDescription(answer)
+		err = setLocalDescription(peer.pc, answer)
 		if err != nil {
-			peer.pc.Close()
-			r <- buildError(ErrorServerSetLocalAnswer, err)
-			return
+			return buildError(ErrorServerSetLocalAnswer, err)
 		}
-		r <- nil
+		return nil
 	}, peerTrackConnectionTimeout)
 
 	if err != nil {
+		_ = lockRunWithTimeout(func() error {
+			return peer.close()
+		}, peerTrackReadTimeout)
 		return nil, err
 	}
 	return peer.pc.LocalDescription(), nil
@@ -285,8 +283,8 @@ func (r *Router) trickle(rid, uid, cid string, candi string) error {
 	peer.Lock()
 	defer peer.Unlock()
 
-	return lockRunWithTimeout(func(r chan error) {
-		r <- peer.pc.AddICECandidate(ici)
+	return lockRunWithTimeout(func() error {
+		return peer.pc.AddICECandidate(ici)
 	}, peerTrackReadTimeout)
 }
 
@@ -300,8 +298,13 @@ func (r *Router) subscribe(rid, uid, cid string) (*webrtc.SessionDescription, er
 		return nil, err
 	}
 
-	err = lockRunWithTimeout(func(r chan error) {
-		r <- peer.doSubscribe(room.m)
+	err = lockRunWithTimeout(func() error {
+		err := peer.doSubscribe(room.m)
+		if err != nil {
+			_ = peer.close()
+			return err
+		}
+		return nil
 	}, peerTrackConnectionTimeout)
 
 	if err != nil {
@@ -314,65 +317,65 @@ func (peer *Peer) doSubscribe(peers map[string]*Peer) error {
 	peer.Lock()
 	defer peer.Unlock()
 
-	return lockRunWithTimeout(func(r chan error) {
+	return lockRunWithTimeout(func() error {
 		var renegotiate bool
 		for _, pub := range peers {
 			if pub.uid == peer.uid {
 				continue
 			}
 
-			r := peer.connectPublisher(pub)
-			renegotiate = renegotiate || r
+			res, err := peer.connectPublisher(pub)
+			if err != nil {
+				return err
+			}
+			renegotiate = renegotiate || res
 		}
 		if renegotiate {
 			offer, err := peer.pc.CreateOffer(nil)
 			if err != nil {
-				r <- buildError(ErrorServerCreateOffer, err)
-				return
+				return buildError(ErrorServerCreateOffer, err)
 			}
-			err = peer.pc.SetLocalDescription(offer)
+			err = setLocalDescription(peer.pc, offer)
 			if err != nil {
-				r <- buildError(ErrorServerSetLocalOffer, err)
-				return
+				return buildError(ErrorServerSetLocalOffer, err)
 			}
 		}
-		r <- nil
+		return nil
 	}, peerTrackConnectionTimeout)
 }
 
-func (sub *Peer) connectPublisher(pub *Peer) bool {
+func (sub *Peer) connectPublisher(pub *Peer) (bool, error) {
 	pub.Lock()
 	defer pub.Unlock()
 
 	var renegotiate bool
-	_ = lockRunWithTimeout(func(r chan error) {
+	err := lockRunWithTimeout(func() error {
 		old := sub.publishers[pub.uid]
 		if old != nil && (pub.track == nil || old.id != pub.cid) {
 			err := sub.pc.RemoveTrack(old.rtp)
 			if err != nil {
-				logger.Printf("failed to remove sender %s from peer %s with error %v\n", pub.id(), sub.id(), err)
-			} else {
-				delete(sub.publishers, pub.uid)
-				delete(pub.subscribers, sub.uid)
-				renegotiate = true
+				return fmt.Errorf("pc.RemoveTrack(%s, %s) => %v", pub.id(), sub.id(), err)
 			}
+			delete(sub.publishers, pub.uid)
+			delete(pub.subscribers, sub.uid)
+			renegotiate = true
 		}
 		if pub.track != nil && (old == nil || old.id != pub.cid) {
 			sender, err := sub.pc.AddTrack(pub.track)
-			logger.Printf("peer %s add subscriber %s => %v %v", sub.id(), pub.id(), sender, err)
+			logger.Printf("pc.AddTrack(%s, %s) => %v %v", sub.id(), pub.id(), sender, err)
 			if err != nil {
-				logger.Printf("failed to add sender %s to peer %s with error %v\n", pub.id(), sub.id(), err)
-			} else if id := sender.Track().ID(); id != pub.cid {
-				panic(fmt.Errorf("malformed peer and track id %s %s", pub.cid, id))
-			} else {
-				sub.publishers[pub.uid] = &Sender{id: pub.cid, rtp: sender}
-				pub.subscribers[sub.uid] = &Sender{id: sub.cid, rtp: sender}
-				renegotiate = true
+				return fmt.Errorf("pc.AddTrack(%s, %s) => %v", sub.id(), pub.id(), err)
 			}
+			if id := sender.Track().ID(); id != pub.cid {
+				return fmt.Errorf("malformed peer and track id %s %s", pub.cid, id)
+			}
+			sub.publishers[pub.uid] = &Sender{id: pub.cid, rtp: sender}
+			pub.subscribers[sub.uid] = &Sender{id: sub.cid, rtp: sender}
+			renegotiate = true
 		}
-		r <- nil
+		return nil
 	}, peerTrackReadTimeout)
-	return renegotiate
+	return renegotiate, err
 }
 
 func (r *Router) answer(rid, uid, cid string, jsep string) error {
@@ -400,10 +403,14 @@ func (r *Router) answer(rid, uid, cid string, jsep string) error {
 	peer.Lock()
 	defer peer.Unlock()
 
-	return lockRunWithTimeout(func(r chan error) {
+	return lockRunWithTimeout(func() error {
 		err := peer.pc.SetRemoteDescription(answer)
-		logger.Printf("answer(%s,%s,%s) SetRemoteDescription with %v\n", rid, uid, cid, err)
-		r <- err
+		logger.Printf("pc.SetRemoteDescription(%s, %s, %s) => %v", rid, uid, cid, err)
+		if err != nil {
+			_ = peer.close()
+			return buildError(ErrorServerSetRemoteAnswer, err)
+		}
+		return nil
 	}, peerTrackConnectionTimeout)
 }
 

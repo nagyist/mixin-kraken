@@ -74,18 +74,21 @@ func (p *Peer) CloseWithTimeout() error {
 	p.Lock()
 	defer p.Unlock()
 
+	err := lockRunWithTimeout(func() error {
+		return p.close()
+	}, peerTrackReadTimeout)
+	logger.Printf("PeerClose(%s) with %v\n", p.id(), err)
+	return err
+}
+
+func (p *Peer) close() error {
 	if p.cid == peerTrackClosedId {
-		logger.Printf("PeerClose(%s) already\n", p.id())
 		return nil
 	}
 
 	p.track = nil
 	p.cid = peerTrackClosedId
-	err := lockRunWithTimeout(func(r chan error) {
-		r <- p.pc.Close()
-	}, peerTrackReadTimeout)
-	logger.Printf("PeerClose(%s) with %v\n", p.id(), err)
-	return err
+	return p.pc.Close()
 }
 
 func (peer *Peer) handle() {
