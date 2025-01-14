@@ -35,18 +35,17 @@ type Sender struct {
 }
 
 type Peer struct {
-	sync.Mutex
-	rid         string
-	uid         string
-	cid         string
-	callback    string
-	listenOnly  bool
-	pc          *webrtc.PeerConnection
-	track       *webrtc.TrackLocalStaticRTP
-	publishers  map[string]*Sender
-	subscribers map[string]*Sender
-	queue       chan *rtp.Packet
-	connected   chan bool
+	sync.RWMutex
+	rid        string
+	uid        string
+	cid        string
+	callback   string
+	listenOnly bool
+	pc         *webrtc.PeerConnection
+	track      *webrtc.TrackLocalStaticRTP
+	publishers map[string]*Sender
+	queue      chan *rtp.Packet
+	connected  chan bool
 }
 
 func BuildPeer(rid, uid string, pc *webrtc.PeerConnection, callback string, listenOnly bool) *Peer {
@@ -54,13 +53,16 @@ func BuildPeer(rid, uid string, pc *webrtc.PeerConnection, callback string, list
 	if err != nil {
 		panic(err)
 	}
-	peer := &Peer{rid: rid, uid: uid, cid: cid.String(), pc: pc}
+	peer := new(Peer)
+	peer.rid = rid
+	peer.uid = uid
+	peer.cid = cid.String()
+	peer.pc = pc
 	peer.callback = callback
 	peer.listenOnly = listenOnly
 	peer.connected = make(chan bool, 1)
 	peer.queue = make(chan *rtp.Packet, 8)
 	peer.publishers = make(map[string]*Sender)
-	peer.subscribers = make(map[string]*Sender)
 	peer.handle()
 	return peer
 }

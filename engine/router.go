@@ -345,8 +345,8 @@ func (peer *Peer) doSubscribe(peers map[string]*Peer) error {
 }
 
 func (sub *Peer) connectPublisher(pub *Peer) (bool, error) {
-	pub.Lock()
-	defer pub.Unlock()
+	pub.RLock()
+	defer pub.RUnlock()
 
 	var renegotiate bool
 	err := lockRunWithTimeout(func() error {
@@ -357,7 +357,6 @@ func (sub *Peer) connectPublisher(pub *Peer) (bool, error) {
 				return fmt.Errorf("pc.RemoveTrack(%s, %s) => %v", pub.id(), sub.id(), err)
 			}
 			delete(sub.publishers, pub.uid)
-			delete(pub.subscribers, sub.uid)
 			renegotiate = true
 		}
 		if pub.track != nil && (old == nil || old.id != pub.cid) {
@@ -370,7 +369,6 @@ func (sub *Peer) connectPublisher(pub *Peer) (bool, error) {
 				return fmt.Errorf("malformed peer and track id %s %s", pub.cid, id)
 			}
 			sub.publishers[pub.uid] = &Sender{id: pub.cid, rtp: sender}
-			pub.subscribers[sub.uid] = &Sender{id: sub.cid, rtp: sender}
 			renegotiate = true
 		}
 		return nil
