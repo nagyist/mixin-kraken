@@ -69,7 +69,7 @@ func (p *Peer) id() string {
 	return fmt.Sprintf("%s:%s:%s", p.rid, p.uid, p.cid)
 }
 
-func (p *Peer) Close() error {
+func (p *Peer) CloseWithTimeout() error {
 	logger.Printf("PeerClose(%s) now\n", p.id())
 	p.Lock()
 	defer p.Unlock()
@@ -81,7 +81,9 @@ func (p *Peer) Close() error {
 
 	p.track = nil
 	p.cid = peerTrackClosedId
-	err := p.pc.Close()
+	err := lockRunWithTimeout(func(r chan error) {
+		r <- p.pc.Close()
+	}, peerTrackReadTimeout)
 	logger.Printf("PeerClose(%s) with %v\n", p.id(), err)
 	return err
 }
@@ -95,7 +97,7 @@ func (peer *Peer) handle() {
 		case <-peer.connected:
 		case <-timer.C:
 			logger.Printf("HandlePeer(%s) OnTrackTimeout()\n", peer.id())
-			peer.Close()
+			peer.CloseWithTimeout()
 		}
 	}()
 
@@ -126,7 +128,7 @@ func (peer *Peer) handle() {
 			err = peer.copyTrack(rt)
 			logger.Printf("HandlePeer(%s) OnTrack(%d, %d) end with %v\n", peer.id(), rt.PayloadType(), rt.SSRC(), err)
 		}
-		peer.Close()
+		peer.CloseWithTimeout()
 	})
 }
 

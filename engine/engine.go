@@ -27,7 +27,7 @@ type Engine struct {
 	PortMin   uint16
 	PortMax   uint16
 
-	State State
+	state *State
 	rooms *rmap
 }
 
@@ -56,11 +56,9 @@ func (engine *Engine) Loop() {
 		}
 		engine.rooms.RUnlock()
 
-		state := State{UpdatedAt: time.Now()}
+		state := &State{UpdatedAt: time.Now()}
 		for _, pm := range rooms {
-			pm.RLock()
-			peers := pm.peersCopy()
-			pm.RUnlock()
+			peers := pm.PeersCopy()
 			ap, cp := 0, 0
 			for _, p := range peers {
 				if p.cid == peerTrackClosedId {
@@ -77,7 +75,7 @@ func (engine *Engine) Loop() {
 				state.ClosedRooms += 1
 			}
 		}
-		engine.State = state
+		engine.state = state
 
 		time.Sleep(engineStateLoopPeriod)
 	}
@@ -160,7 +158,10 @@ func (engine *Engine) GetRoom(rid string) *pmap {
 	return rm.m[rid]
 }
 
-func (room *pmap) peersCopy() map[string]*Peer {
+func (room *pmap) PeersCopy() map[string]*Peer {
+	room.RLock()
+	defer room.RUnlock()
+
 	peers := make(map[string]*Peer, len(room.m))
 	for k, v := range room.m {
 		peers[k] = v
@@ -168,7 +169,14 @@ func (room *pmap) peersCopy() map[string]*Peer {
 	return peers
 }
 
-func (room *pmap) get(uid, cid string) (*Peer, error) {
+func (room *pmap) GetPeer(uid, cid string) (*Peer, error) {
+	room.RLock()
+	defer room.RUnlock()
+
+	return room.getPeer(uid, cid)
+}
+
+func (room *pmap) getPeer(uid, cid string) (*Peer, error) {
 	peer := room.m[uid]
 	if peer == nil {
 		return nil, buildError(ErrorPeerNotFound, fmt.Errorf("peer %s not found in %s", uid, room.id))
