@@ -73,7 +73,7 @@ func (r *Router) create(rid, uid, callback string, listenOnly bool, offer webrtc
 	se.EnableSCTPZeroChecksum(true)
 	se.SetInterfaceFilter(func(in string) bool { return in == r.engine.Interface })
 	se.SetNAT1To1IPs([]string{r.engine.IP}, webrtc.ICECandidateTypeHost)
-	se.SetICETimeouts(10*time.Second, 30*time.Second, 2*time.Second)
+	se.SetICETimeouts(10*time.Second, 20*time.Second, 2*time.Second)
 	se.SetDTLSInsecureSkipHelloVerify(true)
 	se.SetReceiveMTU(8192)
 	err := se.SetEphemeralUDPPortRange(r.engine.PortMin, r.engine.PortMax)

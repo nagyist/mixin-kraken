@@ -17,8 +17,8 @@ import (
 
 const (
 	peerTrackClosedId          = "CLOSED"
-	peerTrackConnectionTimeout = 30 * time.Second
-	peerTrackReadTimeout       = 10 * time.Second
+	peerTrackConnectionTimeout = 15 * time.Second
+	peerTrackReadTimeout       = 5 * time.Second
 )
 
 var clbkClient *http.Client
