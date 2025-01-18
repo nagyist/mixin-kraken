@@ -71,6 +71,7 @@ func (engine *Engine) Loop() {
 			state.ClosedPeers += cp
 			if ap > 0 {
 				state.ActiveRooms += 1
+				logger.Printf("room#%s with %d active and %d closed peers", pm.id, ap, cp)
 			} else {
 				state.ClosedRooms += 1
 			}

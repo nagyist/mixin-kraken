@@ -249,7 +249,7 @@ func (r *Router) restart(rid, uid, cid string, jsep string) (*webrtc.SessionDesc
 	if err != nil {
 		_ = lockRunWithTimeout(func() error {
 			return peer.close()
-		}, peerTrackReadTimeout)
+		}, peerTrackConnectionTimeout)
 		return nil, err
 	}
 	return peer.pc.LocalDescription(), nil
