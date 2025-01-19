@@ -30,15 +30,15 @@ type Call struct {
 type Render struct {
 	w       http.ResponseWriter
 	impl    *render.Render
-	id      string
+	call    *Call
 	startAt time.Time
 }
 
-func NewRender(w http.ResponseWriter, id string) *Render {
+func NewRender(w http.ResponseWriter, c *Call) *Render {
 	r := &Render{
 		w:       w,
-		id:      id,
 		impl:    render.New(),
+		call:    c,
 		startAt: time.Now(),
 	}
 	return r
@@ -46,31 +46,33 @@ func NewRender(w http.ResponseWriter, id string) *Render {
 
 func (r *Render) RenderData(data any) {
 	body := map[string]any{"data": data}
-	if r.id != "" {
-		body["id"] = r.id
+	if r.call != nil {
+		body["id"] = r.call.Id
 	}
 	rerr := r.impl.JSON(r.w, http.StatusOK, body)
 	if rerr != nil {
 		panic(rerr)
 	}
-	logger.Printf("RPC.handle(id: %s, time: %f) OK\n", r.id, time.Since(r.startAt).Seconds())
+	logger.Printf("RPC.handle(id: %s, method: %s, time: %f) OK\n",
+		r.call.Id, r.call.Method, time.Since(r.startAt).Seconds())
 }
 
 func (r *Render) RenderError(err error) {
 	body := map[string]any{"error": err}
-	if r.id != "" {
-		body["id"] = r.id
+	if r.call != nil {
+		body["id"] = r.call.Id
 	}
 	rerr := r.impl.JSON(r.w, http.StatusOK, body)
 	if rerr != nil {
 		panic(err)
 	}
-	logger.Printf("RPC.handle(id: %s, time: %f) ERROR %s\n", r.id, time.Since(r.startAt).Seconds(), err.Error())
+	logger.Printf("RPC.handle(id: %s, method: %s, time: %f) ERROR %s\n",
+		r.call.Id, r.call.Method, time.Since(r.startAt).Seconds(), err.Error())
 }
 
 func (impl *R) root(w http.ResponseWriter, r *http.Request, _ map[string]string) {
 	info := impl.info()
-	renderer := NewRender(w, uuid.Must(uuid.NewV4()).String())
+	renderer := NewRender(w, &Call{Id: uuid.Must(uuid.NewV4()).String(), Method: "root"})
 	renderer.RenderData(info)
 }
 
@@ -82,7 +84,7 @@ func (impl *R) handle(w http.ResponseWriter, r *http.Request, _ map[string]strin
 		renderJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 		return
 	}
-	renderer := NewRender(w, call.Id)
+	renderer := NewRender(w, &call)
 	logger.Printf("RPC.handle(id: %s, method: %s, params: %v)\n", call.Id, call.Method, call.Params)
 	switch call.Method {
 	case "turn":
