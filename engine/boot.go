@@ -15,5 +15,8 @@ func Boot(cp string) {
 	}
 
 	go engine.Loop()
-	ServeRPC(engine, conf)
+	err = ServeRPC(engine, conf)
+	if err != nil {
+		panic(err)
+	}
 }

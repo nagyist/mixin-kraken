@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 	"os/user"
@@ -9,14 +10,20 @@ import (
 	"strings"
 
 	"github.com/MixinNetwork/kraken/engine"
-	"github.com/MixinNetwork/kraken/monitor"
 	"github.com/MixinNetwork/mixin/logger"
 )
 
+const Version = "0.3.1"
+
 func main() {
 	cp := flag.String("c", "~/.kraken/engine.toml", "configuration file path")
-	sr := flag.String("s", "engine", "service engine or monitor")
 	flag.Parse()
+
+	args := flag.Args()
+	if len(args) > 0 {
+		fmt.Println(Version)
+		return
+	}
 
 	if strings.HasPrefix(*cp, "~/") {
 		usr, _ := user.Current()
@@ -26,13 +33,11 @@ func main() {
 	logger.SetLevel(logger.VERBOSE)
 
 	go func() {
-		http.ListenAndServe(":9000", http.DefaultServeMux)
+		err := http.ListenAndServe(":9000", http.DefaultServeMux)
+		if err != nil {
+			panic(err)
+		}
 	}()
 
-	switch *sr {
-	case "engine":
-		engine.Boot(*cp)
-	case "monitor":
-		monitor.Boot(*cp)
-	}
+	engine.Boot(*cp)
 }
