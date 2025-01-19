@@ -18,14 +18,14 @@ import (
 const (
 	peerTrackClosedId          = "CLOSED"
 	peerTrackConnectionTimeout = 20 * time.Second
-	peerTrackReadTimeout       = 10 * time.Second
+	peerTrackReadTimeout       = 5 * time.Second
 )
 
 var clbkClient *http.Client
 
 func init() {
 	clbkClient = &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: 5 * time.Second,
 	}
 }
 
@@ -78,7 +78,7 @@ func (p *Peer) CloseWithTimeout() error {
 
 	err := lockRunWithTimeout(func() error {
 		return p.close()
-	}, peerTrackConnectionTimeout)
+	}, peerTrackReadTimeout)
 	logger.Printf("PeerClose(%s) with %v\n", p.id(), err)
 	return err
 }

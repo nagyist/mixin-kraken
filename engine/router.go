@@ -249,7 +249,7 @@ func (r *Router) restart(rid, uid, cid string, jsep string) (*webrtc.SessionDesc
 	if err != nil {
 		_ = lockRunWithTimeout(func() error {
 			return peer.close()
-		}, peerTrackConnectionTimeout)
+		}, peerTrackReadTimeout)
 		return nil, err
 	}
 	return peer.pc.LocalDescription(), nil
@@ -300,6 +300,7 @@ func (r *Router) subscribe(rid, uid, cid string) (*webrtc.SessionDescription, er
 
 	err = lockRunWithTimeout(func() error {
 		err := peer.doSubscribe(room.m)
+		logger.Printf("peer.doSubscribe(%s, %s, %s) => %v", rid, uid, cid, err)
 		if err != nil {
 			_ = peer.close()
 			return err
@@ -341,7 +342,7 @@ func (peer *Peer) doSubscribe(peers map[string]*Peer) error {
 			}
 		}
 		return nil
-	}, peerTrackConnectionTimeout)
+	}, peerTrackReadTimeout)
 }
 
 func (sub *Peer) connectPublisher(pub *Peer) (bool, error) {
@@ -405,11 +406,10 @@ func (r *Router) answer(rid, uid, cid string, jsep string) error {
 		err := peer.pc.SetRemoteDescription(answer)
 		logger.Printf("pc.SetRemoteDescription(%s, %s, %s) => %v", rid, uid, cid, err)
 		if err != nil {
-			_ = peer.close()
 			return buildError(ErrorServerSetRemoteAnswer, err)
 		}
 		return nil
-	}, peerTrackConnectionTimeout)
+	}, peerTrackReadTimeout)
 }
 
 func validateId(id string) error {
