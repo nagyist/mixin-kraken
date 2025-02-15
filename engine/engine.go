@@ -14,6 +14,7 @@ const (
 )
 
 type State struct {
+	BootedAt    time.Time `json:"booted_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	ActivePeers int       `json:"active_peers"`
 	ClosedPeers int       `json:"closed_peers"`
@@ -48,6 +49,8 @@ func BuildEngine(conf *Configuration) (*Engine, error) {
 }
 
 func (engine *Engine) Loop() {
+	bootedAt := time.Now()
+
 	for {
 		engine.rooms.RLock()
 		rooms := make(map[string]*pmap, len(engine.rooms.m))
@@ -56,7 +59,10 @@ func (engine *Engine) Loop() {
 		}
 		engine.rooms.RUnlock()
 
-		state := &State{UpdatedAt: time.Now()}
+		state := &State{
+			BootedAt:  bootedAt,
+			UpdatedAt: time.Now(),
+		}
 		for _, pm := range rooms {
 			peers := pm.PeersCopy()
 			ap, cp := 0, 0
