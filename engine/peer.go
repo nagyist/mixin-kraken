@@ -219,18 +219,22 @@ func (peer *Peer) consumeQueue() error {
 	select {
 	case pkt, ok := <-peer.queue:
 		if !ok {
-			return fmt.Errorf("peer queue closed")
+			return fmt.Errorf("peer %s queue closed", peer.uid)
+		}
+		track := peer.track
+		if track == nil {
+			return fmt.Errorf("peer %s closed", peer.uid)
 		}
 		if peer.listenOnly {
 			// FIXME make real silent opus packet
 			pkt.Payload = make([]byte, len(pkt.Payload))
 		}
-		err := peer.track.WriteRTP(pkt)
+		err := track.WriteRTP(pkt)
 		if err != nil {
-			return fmt.Errorf("peer track write %v", err)
+			return fmt.Errorf("peer %s track write %v", peer.uid, err)
 		}
 	case <-timer.C:
-		return fmt.Errorf("peer track read timeout")
+		return fmt.Errorf("peer %s track read timeout", peer.uid)
 	}
 
 	return nil
