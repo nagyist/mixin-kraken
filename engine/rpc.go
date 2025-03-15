@@ -225,7 +225,7 @@ func (r *R) publish(params []any) (string, *webrtc.SessionDescription, error) {
 	var limit int
 	var callback string
 	if len(params) == 5 {
-		i, err := strconv.ParseInt(fmt.Sprint(params[3]), 10, 64)
+		i, err := strconv.ParseInt(fmt.Sprint(params[3]), 10, 32)
 		if err != nil {
 			return "", nil, buildError(ErrorInvalidParams, fmt.Errorf("invalid limit type %v %v", params[3], err))
 		}
