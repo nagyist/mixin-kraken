@@ -18,8 +18,10 @@ type State struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 	ActivePeers int       `json:"active_peers"`
 	ClosedPeers int       `json:"closed_peers"`
+	PeakPeers   int       `json:"peak_peers"`
 	ActiveRooms int       `json:"active_rooms"`
 	ClosedRooms int       `json:"closed_rooms"`
+	PeakRooms   int       `json:"peak_rooms"`
 }
 
 type Engine struct {
@@ -28,8 +30,10 @@ type Engine struct {
 	PortMin   uint16
 	PortMax   uint16
 
-	state *State
-	rooms *rmap
+	peakPeers int
+	peakRooms int
+	state     *State
+	rooms     *rmap
 }
 
 func BuildEngine(conf *Configuration) (*Engine, error) {
@@ -82,6 +86,14 @@ func (engine *Engine) Loop() {
 				state.ClosedRooms += 1
 			}
 		}
+		if state.ActiveRooms > engine.peakRooms {
+			engine.peakRooms = state.ActiveRooms
+		}
+		if state.ActivePeers > engine.peakPeers {
+			engine.peakPeers = state.ActivePeers
+		}
+		state.PeakPeers = engine.peakPeers
+		state.PeakRooms = engine.peakRooms
 		engine.state = state
 
 		time.Sleep(engineStateLoopPeriod)
