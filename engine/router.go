@@ -403,6 +403,9 @@ func (r *Router) answer(rid, uid, cid string, jsep string) error {
 	defer peer.Unlock()
 
 	return lockRunWithTimeout(func() error {
+		if peer.pc.SignalingState() == webrtc.SignalingStateStable {
+			return nil
+		}
 		err := peer.pc.SetRemoteDescription(answer)
 		logger.Printf("pc.SetRemoteDescription(%s, %s, %s) => %v", rid, uid, cid, err)
 		if err != nil {

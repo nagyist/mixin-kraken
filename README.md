@@ -1,6 +1,6 @@
 # Kraken
 
-🐙 High performance WebRTC SFU implemented with pure Go.
+🐙 High performance WebRTC audio SFU implemented with pure Go.
 
 ## Architecture
 

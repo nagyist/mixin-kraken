@@ -3,7 +3,7 @@ module github.com/MixinNetwork/kraken
 go 1.24.1
 
 require (
-	github.com/MixinNetwork/mixin v0.18.24
+	github.com/MixinNetwork/mixin v0.18.25
 	github.com/dimfeld/httptreemux/v5 v5.5.0
 	github.com/gofrs/uuid/v5 v5.3.1
 	github.com/gorilla/handlers v1.5.2
