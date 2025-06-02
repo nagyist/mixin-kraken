@@ -2,7 +2,7 @@ package engine
 
 import "github.com/MixinNetwork/mixin/logger"
 
-func Boot(cp string) {
+func Boot(cp, version string) {
 	conf, err := Setup(cp)
 	if err != nil {
 		panic(err)
@@ -14,7 +14,7 @@ func Boot(cp string) {
 		panic(err)
 	}
 
-	go engine.Loop()
+	go engine.Loop(version)
 	err = ServeRPC(engine, conf)
 	if err != nil {
 		panic(err)

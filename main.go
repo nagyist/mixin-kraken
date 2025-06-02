@@ -13,7 +13,7 @@ import (
 	"github.com/MixinNetwork/mixin/logger"
 )
 
-const Version = "0.3.2"
+const Version = "0.3.3"
 
 func main() {
 	cp := flag.String("c", "~/.kraken/engine.toml", "configuration file path")
@@ -39,5 +39,5 @@ func main() {
 		}
 	}()
 
-	engine.Boot(*cp)
+	engine.Boot(*cp, Version)
 }

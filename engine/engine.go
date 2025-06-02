@@ -14,6 +14,7 @@ const (
 )
 
 type State struct {
+	Version     string    `json:"version"`
 	BootedAt    time.Time `json:"booted_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	ActivePeers int       `json:"active_peers"`
@@ -52,7 +53,7 @@ func BuildEngine(conf *Configuration) (*Engine, error) {
 	return engine, nil
 }
 
-func (engine *Engine) Loop() {
+func (engine *Engine) Loop(version string) {
 	bootedAt := time.Now()
 
 	for {
@@ -64,6 +65,7 @@ func (engine *Engine) Loop() {
 		engine.rooms.RUnlock()
 
 		state := &State{
+			Version:   version,
 			BootedAt:  bootedAt,
 			UpdatedAt: time.Now(),
 		}
